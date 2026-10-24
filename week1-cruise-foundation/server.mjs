@@ -251,12 +251,52 @@ const server=http.createServer(async(req,res)=>{
     requireRoles(u,'ADMIN');const b=await requestJson(req);if(typeof b.active!=='boolean')fail(400,'Trạng thái mã định danh không hợp lệ.');
     await runProcedure(`EXEC dbo.usp_AdminSetIdentifierActive @ActorId=${u.UserId},@IdentifierId=${id(identifierMatch[1])},@Active=${b.active?1:0};`);return send(200,{ok:true});
    }
+   if(req.method==='POST'&&url.pathname==='/api/feedback'){
+    requireRoles(u,'PASSENGER');const b=await requestJson(req),kind=typeof b.kind==='string'?b.kind.toUpperCase():'';
+    if(!['ACTIVITY','CRUISE'].includes(kind))fail(400,'Loại đánh giá không hợp lệ.');
+    const rating=whole(b.rating,1,5,'Điểm đánh giá'),comment=b.comment===undefined||b.comment===null?'':(typeof b.comment==='string'&&b.comment.length<=500?b.comment:fail(400,'Nhận xét không được vượt quá 500 ký tự.'));
+    const registrationId=kind==='ACTIVITY'?id(b.registrationId):0,bookingId=kind==='CRUISE'?id(b.bookingId):0;
+    await runProcedure(`EXEC dbo.usp_SubmitFeedback @ActorId=${u.UserId},@Kind=${literal(kind)},@Rating=${rating},@Comment=${literal(comment)},@RegistrationId=${registrationId},@BookingId=${bookingId};`);
+    return send(201,{ok:true});
+   }
    if(req.method!=='GET')fail(405,'Phương thức không được hỗ trợ cho API này.');
    if(url.pathname==='/api/me')return send(200,u);
    if(url.pathname==='/api/passenger/finance'){
     requireRoles(u,'PASSENGER');const finance=await jsonQuery(passengerFinanceQuery(u));
     for(const key of ['accounts','transactions','invoices'])if(!Array.isArray(finance?.[key]))finance[key]=[];
     return send(200,finance);
+   }
+   if(url.pathname==='/api/feedback/data'){
+    requireRoles(u,'PASSENGER','OPERATIONS','ACTIVITY','SHORE','ADMIN');
+    const guest=u.roles.includes('PASSENGER')&&!u.roles.includes('ADMIN');
+    const activityRows=guest?(
+     `SELECT r.RegistrationId,r.BookingId,a.ActivityId,a.CruiseId,c.Name AS Cruise,a.Name,a.Kind,a.StartsAt,a.Status,r.Status AS RegistrationStatus,f.Rating AS MyRating,f.Comment AS MyComment,
+      CAST(CASE WHEN r.Status='CONFIRMED' AND a.Status='COMPLETED' AND ci.RegistrationId IS NOT NULL AND f.FeedbackId IS NULL THEN 1 ELSE 0 END AS bit) AS CanReview,
+      CASE WHEN f.FeedbackId IS NOT NULL THEN N'Bạn đã đánh giá hoạt động này.' WHEN r.Status<>'CONFIRMED' THEN N'Chỉ đăng ký đã xác nhận mới đủ điều kiện.' WHEN ci.RegistrationId IS NULL THEN N'Bạn cần check-in hoạt động.' WHEN a.Status<>'COMPLETED' THEN N'Hoạt động chưa được đánh dấu hoàn thành.' ELSE N'Đủ điều kiện đánh giá.' END AS EligibilityMessage,
+      (SELECT CAST(AVG(CAST(f2.Rating AS decimal(10,2))) AS decimal(4,2)) FROM dbo.Feedback f2 JOIN dbo.Registrations r2 ON r2.RegistrationId=f2.RegistrationId WHERE r2.ActivityId=a.ActivityId) AS AverageRating,
+      (SELECT COUNT(*) FROM dbo.Feedback f2 JOIN dbo.Registrations r2 ON r2.RegistrationId=f2.RegistrationId WHERE r2.ActivityId=a.ActivityId) AS RatingCount
+      FROM dbo.Registrations r JOIN dbo.Activities a ON a.ActivityId=r.ActivityId JOIN dbo.Bookings b ON b.BookingId=r.BookingId JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId
+      LEFT JOIN dbo.CheckIns ci ON ci.RegistrationId=r.RegistrationId LEFT JOIN dbo.Feedback f ON f.RegistrationId=r.RegistrationId
+      WHERE b.PassengerId IN(SELECT PassengerId FROM dbo.Passengers WHERE UserId=${u.UserId}) ORDER BY a.StartsAt DESC,a.ActivityId FOR JSON PATH`
+    ):(
+     `SELECT a.ActivityId,a.CruiseId,c.Name AS Cruise,a.Name,a.Kind,a.StartsAt,a.Status,CAST(AVG(CAST(f.Rating AS decimal(10,2))) AS decimal(4,2)) AS AverageRating,COUNT(f.FeedbackId) AS RatingCount
+      FROM dbo.Activities a JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId LEFT JOIN dbo.Registrations r ON r.ActivityId=a.ActivityId LEFT JOIN dbo.Feedback f ON f.RegistrationId=r.RegistrationId
+      GROUP BY a.ActivityId,a.CruiseId,c.Name,a.Name,a.Kind,a.StartsAt,a.Status ORDER BY a.StartsAt DESC,a.ActivityId FOR JSON PATH`
+    );
+    const cruiseRows=guest?(
+     `SELECT b.BookingId,b.CruiseId,c.Name,c.StartDate,c.EndDate,c.Status,f.Rating AS MyRating,f.Comment AS MyComment,
+      CAST(CASE WHEN c.Status='CLOSED' AND f.FeedbackId IS NULL THEN 1 ELSE 0 END AS bit) AS CanReview,
+      CASE WHEN f.FeedbackId IS NOT NULL THEN N'Bạn đã đánh giá chuyến đi này.' WHEN c.Status<>'CLOSED' THEN N'Chỉ đánh giá được sau khi chuyến kết thúc.' ELSE N'Đủ điều kiện đánh giá.' END AS EligibilityMessage,
+      (SELECT CAST(AVG(CAST(f2.Rating AS decimal(10,2))) AS decimal(4,2)) FROM dbo.CruiseFeedback f2 WHERE f2.CruiseId=c.CruiseId) AS AverageRating,
+      (SELECT COUNT(*) FROM dbo.CruiseFeedback f2 WHERE f2.CruiseId=c.CruiseId) AS RatingCount
+      FROM dbo.Bookings b JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId
+      LEFT JOIN dbo.CruiseFeedback f ON f.BookingId=b.BookingId WHERE p.UserId=${u.UserId} ORDER BY c.StartDate DESC,b.BookingId FOR JSON PATH`
+    ):(
+     `SELECT c.CruiseId,c.Name,c.StartDate,c.EndDate,c.Status,CAST(AVG(CAST(f.Rating AS decimal(10,2))) AS decimal(4,2)) AS AverageRating,COUNT(f.FeedbackId) AS RatingCount
+      FROM dbo.Cruises c LEFT JOIN dbo.CruiseFeedback f ON f.CruiseId=c.CruiseId GROUP BY c.CruiseId,c.Name,c.StartDate,c.EndDate,c.Status ORDER BY c.StartDate DESC,c.CruiseId FOR JSON PATH`
+    );
+    const data=(await jsonQuery(`SELECT JSON_QUERY((${activityRows})) AS activities,JSON_QUERY((${cruiseRows})) AS cruises FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`))[0]||{};
+    for(const key of ['activities','cruises'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
    }
    if(url.pathname==='/api/state')return send(200,await state(u));
    if(req.method==='GET'&&url.pathname==='/api/activity/data'){
@@ -317,3 +357,4 @@ const server=http.createServer(async(req,res)=>{
 await query('SELECT TOP(1) PasswordHash,Active FROM Users;');
 server.listen(port,'127.0.0.1',()=>console.log(`Aurora Cruise: http://localhost:${port}`));
 setInterval(()=>{for(const [id,s] of sessions)if(s.expires<=Date.now())sessions.delete(id);for(const [key,t] of attempts)if(Date.now()-t.time>=60000)attempts.delete(key);},60000).unref();
+

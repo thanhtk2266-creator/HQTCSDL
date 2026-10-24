@@ -1,6 +1,6 @@
 # Aurora Cruise · mốc nền tảng và tổng quan
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống, POS, chi phí hành khách và check-in. QR hành khách được cấp từ mã định danh đang hoạt động; API chỉ trả QR trong phạm vi booking của chủ tài khoản. Check-in kiểm tra mã, booking, trạng thái đăng ký, vai trò và thiết bị ở cả API lẫn SQL; mỗi đăng ký chỉ có một lượt check-in, lưu thời gian/nhân viên/thiết bị, và tour bờ có thể ghi nhận khách đã về tàu. POS tra booking, gói, dịch vụ bao gồm và giá qua SQL; bán trực tuyến ghi ngay vào account, offline giữ hàng đợi rồi đồng bộ theo UUID. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 8 vai trò, Tổng quan theo booking/chuyến, quản lý chuyến/lịch cảng, đăng ký, hủy, quản trị hệ thống, POS, chi phí hành khách và check-in. QR hành khách được cấp từ mã định danh đang hoạt động; API chỉ trả QR trong phạm vi booking của chủ tài khoản. Check-in kiểm tra mã, booking, trạng thái đăng ký, vai trò và thiết bị ở cả API lẫn SQL; mỗi đăng ký chỉ có một lượt check-in, lưu thời gian/nhân viên/thiết bị, và tour bờ có thể ghi nhận khách đã về tàu. POS tra booking, gói, dịch vụ bao gồm và giá qua SQL; bán trực tuyến ghi ngay vào account, offline giữ hàng đợi rồi đồng bộ theo UUID. Sau chuyến đi, hành khách có thể đánh giá hoạt động đã hoàn thành và chuyến đi; điểm trung bình cùng số lượt phản hồi được tổng hợp cho đội vận hành. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -52,7 +52,7 @@ Nhân viên POS nhập mã khách, chọn dịch vụ và số lượng. Khi tr�
 
 ## SQL và kiểm tra
 
-Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities → 14-shore-excursions → 14-checkin trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
+Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities → 14-shore-excursions → 14-checkin → 15-feedback trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
 Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run test:pos` và `npm run test:finance`. Test nghiệp vụ tự tạo database riêng rồi xóa sau khi chạy. Hướng dẫn: `docs/POS-OFFLINE.md`, `docs/PASSENGER-FINANCE.md`; chi tiết API/quyền: `docs/AUTH.md`.
 
@@ -61,3 +61,4 @@ Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run 
 Push server.mjs, src, public, scripts, tests, database, docs, README.md, CHAY-WEB.cmd, package.json, package-lock.json và .gitignore. Không push .tmp, node_modules, .env hoặc log.
 
 Các API chính: đăng nhập/đăng xuất, lịch trình, đăng ký/hủy, `/api/qr`, `/api/checkin`, `/api/checkin/:registrationId/return`, `/api/pos/quote`, `/api/pos/sync` và nhóm `/api/admin/*` cho dữ liệu quản trị, người dùng, danh mục, booking, gói dịch vụ, chính sách và mã định danh. Backend và SQL đều kiểm tra quyền; QR và dữ liệu hành khách bị giới hạn theo chủ booking. Cookie HttpOnly và SameSite=Strict; restart server cần đăng nhập lại. Bản học phần chạy localhost.
+
