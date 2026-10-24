@@ -45,11 +45,14 @@ try{
   assert.equal((await call(base,'/api/departments/'+role,undefined,r.cookie)).status,200);
   if(role==='ADMIN'){adminCookie=r.cookie;assert.equal((await call(base,'/api/admin/users',undefined,r.cookie)).status,200);}
   else assert.equal((await call(base,'/api/departments/ADMIN',undefined,r.cookie)).status,403);
-  const state=(await call(base,'/api/state',undefined,r.cookie)).data;
+  const stateResponse=await call(base,'/api/state',undefined,r.cookie);
+  assert.equal(stateResponse.status,200,`Không tải được dữ liệu vai trò ${role}: ${JSON.stringify(stateResponse.data)}`);
+  const state=stateResponse.data;
+  for(const key of ['cruises','activities','bookings','accounts','checkinDevices','checkinRegistrations'])assert(Array.isArray(state[key]),`/api/state thiếu mảng ${key} cho ${role}.`);
   if(['POS','ITINERARY'].includes(role))assert.equal(state.bookings.length,0);
   if(!['PASSENGER','FINANCE','ADMIN'].includes(role))assert.equal(state.accounts.length,0);
-  if(role==='ACTIVITY')assert(state.activities.every(a=>a.Kind==='ONBOARD'));
-  if(role==='SHORE')assert(state.activities.every(a=>a.Kind==='SHORE'));
+  if(role==='ACTIVITY'){assert(state.activities.every(a=>a.Kind==='ONBOARD'));assert(state.checkinRegistrations.every(r=>r.Kind==='ONBOARD'));}
+  if(role==='SHORE'){assert(state.activities.every(a=>a.Kind==='SHORE'));assert(state.checkinRegistrations.every(r=>r.Kind==='SHORE'));}
  });
  await check('Danh sách admin không có mật khẩu',async()=>assert(!JSON.stringify((await call(base,'/api/admin/users',undefined,adminCookie)).data).includes('PasswordHash')));
  await check('Logout vô hiệu phiên cũ',async()=>{assert.equal((await call(base,'/api/logout',{},guestCookie)).status,200);assert.equal((await call(base,'/api/me',undefined,guestCookie)).status,401);});

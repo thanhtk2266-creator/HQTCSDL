@@ -66,7 +66,7 @@ async function state(u){
  const guests=u.roles.some(r=>['PASSENGER','ACTIVITY','SHORE','FINANCE','OPERATIONS','ADMIN'].includes(r));
  const money=u.roles.some(r=>['PASSENGER','FINANCE','ADMIN'].includes(r));
  const itineraryAccess=u.roles.some(r=>['ITINERARY','ADMIN'].includes(r));
- const kind=u.roles.includes('ADMIN')?'':u.roles.includes('ACTIVITY')&&!u.roles.includes('SHORE')?" AND Kind='ONBOARD'":u.roles.includes('SHORE')&&!u.roles.includes('ACTIVITY')?" AND Kind='SHORE'":'';
+ const kind=u.roles.includes('ADMIN')?'':u.roles.includes('ACTIVITY')&&!u.roles.includes('SHORE')?" AND a.Kind='ONBOARD'":u.roles.includes('SHORE')&&!u.roles.includes('ACTIVITY')?" AND a.Kind='SHORE'":'';
  const registrationStats=guest
   ?`SELECT r.RegistrationId,a.ActivityId,a.CruiseId,r.BookingId,r.Status,r.PriceAtRegistration,r.CreatedAt,
     r.CancelledAt,r.CancelledBy,r.CancelReason,r.RefundAmount,DATEADD(hour,-pol.CancelHours,a.StartsAt) AS CancelDeadline,
