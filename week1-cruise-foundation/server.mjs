@@ -59,6 +59,46 @@ function passengerFinanceQuery(u){
    LEFT JOIN dbo.Payments pay ON pay.InvoiceId=inv.InvoiceId ORDER BY inv.CreatedAt DESC FOR JSON PATH)) AS invoices
   FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`;
 }
+function staffFinanceQuery(){
+ return `SELECT
+  JSON_QUERY((SELECT ac.AccountId,ac.BookingId,ac.Status,b.CruiseId,c.Name AS Cruise,u.Name AS Passenger,
+   cb.Number AS Cabin,pk.Name AS Package,dbo.fn_AccountBalance(ac.AccountId) AS Balance,
+   inv.InvoiceId,inv.Total AS InvoiceTotal,inv.CreatedAt AS InvoiceCreatedAt,
+   pay.PaymentId,pay.Amount AS PaymentAmount,pay.Method AS PaymentMethod,pay.CreatedAt AS PaymentCreatedAt
+   FROM dbo.Accounts ac JOIN dbo.Bookings b ON b.BookingId=ac.BookingId
+   JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId
+   JOIN dbo.Users u ON u.UserId=p.UserId JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId
+   JOIN dbo.Packages pk ON pk.PackageId=b.PackageId
+   LEFT JOIN dbo.Invoices inv ON inv.AccountId=ac.AccountId
+   LEFT JOIN dbo.Payments pay ON pay.InvoiceId=inv.InvoiceId ORDER BY ac.AccountId FOR JSON PATH)) AS accounts,
+  JSON_QUERY((SELECT t.TransactionId,t.AccountId,ac.BookingId,b.CruiseId,c.Name AS Cruise,u.Name AS Passenger,
+   cb.Number AS Cabin,t.ServiceId,t.RegistrationId,t.ClientId,t.Quantity,t.Amount,t.RefundAmount,t.RefundedAt,
+   t.Status,t.ReconciledAt,t.ReconciledBy,staff.Name AS ReconciledByName,t.CreatedAt,
+   COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description
+   FROM dbo.Transactions t JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId
+   JOIN dbo.Bookings b ON b.BookingId=ac.BookingId JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId
+   JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users u ON u.UserId=p.UserId
+   JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId LEFT JOIN dbo.Users staff ON staff.UserId=t.ReconciledBy
+   LEFT JOIN dbo.Services s ON s.ServiceId=t.ServiceId LEFT JOIN dbo.Registrations r ON r.RegistrationId=t.RegistrationId
+   LEFT JOIN dbo.Activities a ON a.ActivityId=r.ActivityId ORDER BY t.CreatedAt DESC,t.TransactionId DESC FOR JSON PATH)) AS transactions,
+  JSON_QUERY((SELECT d.DisputeId,d.TransactionId,d.Reason,d.Status,d.SubmittedAt,d.SubmittedBy,d.ResolvedAt,
+   d.ResolvedBy,d.Resolution,t.AccountId,ac.BookingId,b.CruiseId,c.Name AS Cruise,u.Name AS Passenger,
+   cb.Number AS Cabin,t.Amount,COALESCE(s.Name,a.Name,N'Dịch vụ') AS Description
+   FROM dbo.Disputes d JOIN dbo.Transactions t ON t.TransactionId=d.TransactionId
+   JOIN dbo.Accounts ac ON ac.AccountId=t.AccountId JOIN dbo.Bookings b ON b.BookingId=ac.BookingId
+   JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId
+   JOIN dbo.Users u ON u.UserId=p.UserId JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId
+   LEFT JOIN dbo.Services s ON s.ServiceId=t.ServiceId LEFT JOIN dbo.Registrations r ON r.RegistrationId=t.RegistrationId
+   LEFT JOIN dbo.Activities a ON a.ActivityId=r.ActivityId ORDER BY d.SubmittedAt DESC,d.DisputeId DESC FOR JSON PATH)) AS disputes,
+  JSON_QUERY((SELECT i.InvoiceId,i.AccountId,i.Total,i.CreatedAt,b.BookingId,c.Name AS Cruise,
+   u.Name AS Passenger,cb.Number AS Cabin,pay.PaymentId,pay.Amount AS PaymentAmount,pay.Method AS PaymentMethod,
+   pay.CreatedAt AS PaymentCreatedAt FROM dbo.Invoices i JOIN dbo.Accounts ac ON ac.AccountId=i.AccountId
+   JOIN dbo.Bookings b ON b.BookingId=ac.BookingId JOIN dbo.Cruises c ON c.CruiseId=b.CruiseId
+   JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users u ON u.UserId=p.UserId
+   JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId LEFT JOIN dbo.Payments pay ON pay.InvoiceId=i.InvoiceId
+   ORDER BY i.CreatedAt DESC,i.InvoiceId DESC FOR JSON PATH)) AS invoices
+  FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`;
+}
 async function state(u){
  const guest=u.roles.includes('PASSENGER')&&!u.roles.includes('ADMIN');
  const bs=guest?`SELECT b.BookingId FROM Bookings b JOIN Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId}`:'SELECT BookingId FROM Bookings';
@@ -91,7 +131,7 @@ async function state(u){
    ic.Reason,u.Name,ic.CreatedAt FROM dbo.ItineraryChanges ic JOIN dbo.Stops s ON s.StopId=ic.StopId JOIN dbo.Users u ON u.UserId=ic.StaffId
    LEFT JOIN dbo.Ports op ON op.PortId=ic.OldPortId LEFT JOIN dbo.Ports np ON np.PortId=ic.NewPortId LEFT JOIN dbo.Ports p ON p.PortId=s.PortId
  ) h WHERE h.CruiseId IN(${cs}) ORDER BY h.CreatedAt DESC`:`SELECT CAST(NULL AS bigint) AS ChangeId,CAST(NULL AS int) AS CruiseId,CAST(NULL AS varchar(10)) AS ChangeType,CAST(NULL AS nvarchar(200)) AS Subject,CAST(NULL AS nvarchar(500)) AS OldSchedule,CAST(NULL AS nvarchar(500)) AS NewSchedule,CAST(NULL AS nvarchar(500)) AS Reason,CAST(NULL AS nvarchar(100)) AS Staff,CAST(NULL AS datetime2) AS CreatedAt WHERE 1=0`;
- const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT NotificationId,CruiseId,Message,CreatedAt FROM Notifications WHERE CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
+ const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} WHERE n.CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
  bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
  identifiers:guest?`SELECT i.IdentifierId,i.BookingId,i.Code,i.Kind FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId} AND i.Active=1`:'SELECT IdentifierId,BookingId,Code,Kind FROM dbo.Identifiers WHERE 1=0',
  checkinDevices:u.roles.some(r=>['ACTIVITY','SHORE','ADMIN'].includes(r))?"SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE Kind='CHECKIN'":'SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE 1=0',
@@ -174,6 +214,38 @@ const server=http.createServer(async(req,res)=>{
     if(!dispute)throw Error('SQL Server chưa trả về tranh chấp đã ghi nhận.');
     return send(201,dispute);
    }
+    if(req.method==='POST'&&url.pathname==='/api/finance/transactions'){
+     requireRoles(u,'FINANCE');const b=await requestJson(req),transactionId=id(b.transactionId),status=text(b.status,20).trim().toUpperCase();
+     if(!['VOID','REFUNDED'].includes(status))fail(400,'Thao tác tài chính không hợp lệ.');
+     await runProcedure(`EXEC dbo.usp_FinanceTransaction @TransactionId=${transactionId},@StaffId=${u.UserId},@Status=${literal(status)};`);
+     return send(200,{ok:true});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/finance/reconcile'){
+     requireRoles(u,'FINANCE');const b=await requestJson(req);
+     await runProcedure(`EXEC dbo.usp_Reconcile @TransactionId=${id(b.transactionId)},@StaffId=${u.UserId};`);
+     return send(200,{ok:true});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/finance/settle'){
+     requireRoles(u,'FINANCE');const b=await requestJson(req);
+     await runProcedure(`EXEC dbo.usp_SettleAccount @AccountId=${id(b.accountId)},@ActorId=${u.UserId},@Method='MOCK';`);
+     return send(200,{ok:true});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/finance/disputes/resolve'){
+     requireRoles(u,'FINANCE');const b=await requestJson(req),disputeId=id(b.disputeId),resolution=typeof b.resolution==='string'?b.resolution.trim():'';
+     if(resolution.length>500)fail(400,'Phản hồi không được vượt quá 500 ký tự.');
+     await runProcedure(`EXEC dbo.usp_ResolveDispute @DisputeId=${disputeId},@StaffId=${u.UserId},@Resolution=${literal(resolution)};`);
+     return send(200,{ok:true});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/notifications'){
+     requireRoles(u,'ITINERARY','OPERATIONS');const b=await requestJson(req),cruiseId=id(b.cruiseId),message=text(b.message,500).trim();
+     await runProcedure(`EXEC dbo.usp_Notify @CruiseId=${cruiseId},@Message=${literal(message)},@StaffId=${u.UserId};`);
+     return send(201,{ok:true});
+    }
+    if(req.method==='POST'&&url.pathname==='/api/notifications/read'){
+     const b=await requestJson(req);
+     await runProcedure(`EXEC dbo.usp_ReadNotification @NotificationId=${id(b.notificationId)},@UserId=${u.UserId};`);
+     return send(200,{ok:true});
+    }
    if(req.method==='GET'&&url.pathname==='/api/pos/receipts'){
     requireRoles(u,'POS');return send(200,await jsonQuery(`SELECT TOP(50) r.ReceiptId,r.ClientId,r.DeviceId,d.Name AS DeviceName,r.StaffId,staff.Name AS StaffName,r.SyncedAt,t.TransactionId,t.AccountId,b.BookingId,guest.Name AS PassengerName,pk.Name AS Package,CONVERT(decimal(18,2),COALESCE((SELECT SUM(CASE tx.Status WHEN 'POSTED' THEN tx.Amount WHEN 'REFUNDED' THEN tx.Amount-COALESCE(tx.RefundAmount,0) ELSE 0 END) FROM dbo.Transactions tx WHERE tx.AccountId=a.AccountId),0)) AS AccountBalance,t.ServiceId,s.Name AS ServiceName,t.Quantity,t.Amount,t.Status FROM dbo.POSReceipts r JOIN dbo.Devices d ON d.DeviceId=r.DeviceId JOIN dbo.Users staff ON staff.UserId=r.StaffId JOIN dbo.Transactions t ON t.ClientId=r.ClientId JOIN dbo.Services s ON s.ServiceId=t.ServiceId JOIN dbo.Accounts a ON a.AccountId=t.AccountId JOIN dbo.Bookings b ON b.BookingId=a.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId JOIN dbo.Users guest ON guest.UserId=p.UserId JOIN dbo.Packages pk ON pk.PackageId=b.PackageId WHERE r.StaffId=${u.UserId} ORDER BY r.SyncedAt DESC FOR JSON PATH`));
    }
@@ -266,6 +338,11 @@ const server=http.createServer(async(req,res)=>{
     for(const key of ['accounts','transactions','invoices'])if(!Array.isArray(finance?.[key]))finance[key]=[];
     return send(200,finance);
    }
+    if(url.pathname==='/api/finance/data'){
+     requireRoles(u,'FINANCE');const finance=(await jsonQuery(staffFinanceQuery()))[0]||{};
+     for(const key of ['accounts','transactions','disputes','invoices'])if(!Array.isArray(finance[key]))finance[key]=[];
+     return send(200,finance);
+    }
    if(url.pathname==='/api/feedback/data'){
     requireRoles(u,'PASSENGER','OPERATIONS','ACTIVITY','SHORE','ADMIN');
     const guest=u.roles.includes('PASSENGER')&&!u.roles.includes('ADMIN');

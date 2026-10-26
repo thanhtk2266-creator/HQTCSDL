@@ -27,13 +27,13 @@ Nguồn đối chiếu: De-Tai.docx và 1.docx do người dùng cung cấp. Ph�
 | Ngoại tuyến và đồng bộ | localStorage, cache POS, UUID, usp_SyncPOS, SyncReceipts | Chạy thật ở mức đơn giản |
 | Đối soát | usp_Reconcile, ReconciledAt/By, biên nhận đồng bộ, trạng thái và audit | Chạy thật |
 | Tranh chấp | Disputes, usp_Dispute, usp_ResolveDispute | Chạy thật |
-| Hành khách gửi tranh chấp | `usp_SubmitPassengerDispute`, kiểm tra chủ giao dịch, unique filtered index cho tranh chấp OPEN, audit | Đã triển khai trong week1; xử lý tranh chấp do tài chính thực hiện qua SQL |
-| Chốt tài khoản, thanh toán, hóa đơn | usp_Settle, Invoices, Payments | Ghi sổ thật; thu tiền mô phỏng |
-| Xuất hóa đơn | Trang in / Save as PDF của trình duyệt | Chạy thật |
-| Thông báo lịch/tập trung/về tàu | In-app Notifications, tạo tự động khi đổi lịch và gửi thủ công | Chạy thật; không có push/SMS |
+| Hành khách gửi tranh chấp | `usp_SubmitPassengerDispute`, kiểm tra chủ giao dịch, unique filtered index cho tranh chấp OPEN, audit | Đã triển khai; tài chính xử lý trong màn hình Tài chính |
+| Chốt tài khoản, thanh toán, hóa đơn | `usp_SettleAccount`, Invoices, Payments; chặn khi còn tranh chấp hoặc POS chưa đối soát | Ghi sổ thật; thu tiền mô phỏng `MOCK` |
+| Xuất hóa đơn và CSV | In hóa đơn từ trình duyệt; xuất giao dịch CSV có bảo vệ công thức bảng tính | Chạy thật cho Finance/Admin |
+| Thông báo theo chuyến và đã đọc | In-app Notifications, gửi theo chuyến, NotificationReads theo tài khoản | Chạy thật; không có push/SMS |
 | Phản hồi hoạt động và sau chuyến | Feedback, CruiseFeedback; kiểm tra đã tham gia/kết thúc | Chạy thật |
 | Dashboard doanh thu, tham gia, sức chứa, phản hồi | vw_Revenue, vw_ActivitySummary, báo cáo/cảnh báo | Chạy thật |
-| Phân quyền 8 bộ phận | Roles, UserRoles, cookie session, API và procedure kiểm tra quyền | Chạy thật |
+| Phân quyền 9 vai trò | Roles, UserRoles, cookie session, API và procedure kiểm tra quyền | Chạy thật |
 | Chính sách, người dùng, định danh, thiết bị | Trang quản trị, usp_ManageUser, usp_SaveMaster | Chạy thật |
 | Log đối soát và xuất dữ liệu | AuditLog, triggers, CSV | Chạy thật |
 | Bảo vệ dữ liệu | Scrypt, quyền API, khóa ngoại, chống chèn SQL bằng literal hex | Chạy thật cho bản local |
