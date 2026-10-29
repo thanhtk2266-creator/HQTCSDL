@@ -390,7 +390,7 @@ const server=http.createServer(async(req,res)=>{
     for(const key of ['cruises','zones','activities','policy'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
    }
    if(req.method==='GET'&&url.pathname==='/api/shore/data'){
-    requireRoles(u,'SHORE');const data=(await jsonQuery(`SELECT
+    requireRoles(u,'SHORE');const data=await jsonQuery(`SELECT
      JSON_QUERY((SELECT CruiseId,ShipId,Name,StartDate,EndDate,Status FROM dbo.Cruises ORDER BY StartDate FOR JSON PATH)) AS cruises,
      JSON_QUERY((SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM dbo.Stops s JOIN dbo.Ports p ON p.PortId=s.PortId ORDER BY s.Arrival FOR JSON PATH)) AS stops,
      JSON_QUERY((SELECT ProviderId,Name,ContactName,Phone,Email,Active FROM dbo.Providers ORDER BY Name FOR JSON PATH)) AS providers,
@@ -399,7 +399,7 @@ const server=http.createServer(async(req,res)=>{
      JSON_QUERY((SELECT a.ActivityId,a.CruiseId,c.Name AS Cruise,a.StopId,p.Name AS Port,a.ProviderId,v.Name AS Provider,a.Name,a.StartsAt AS GatherAt,a.ReturnAt,a.Capacity,a.Fee,a.Status,(SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CONFIRMED') AS Confirmed FROM dbo.Activities a JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId JOIN dbo.Stops st ON st.StopId=a.StopId JOIN dbo.Ports p ON p.PortId=st.PortId JOIN dbo.Providers v ON v.ProviderId=a.ProviderId WHERE a.Kind='SHORE' ORDER BY a.StartsAt FOR JSON PATH)) AS activities,
      JSON_QUERY((SELECT g.GroupId,g.ActivityId,g.Name,g.VehicleId,g.GuideId,g.Capacity,g.Active,v.Name AS Vehicle,v.PlateNumber,d.Name AS Guide,(SELECT COUNT(*) FROM dbo.ExcursionGroupMembers m WHERE m.GroupId=g.GroupId) AS Assigned FROM dbo.ExcursionGroups g LEFT JOIN dbo.ShoreVehicles v ON v.VehicleId=g.VehicleId LEFT JOIN dbo.ShoreGuides d ON d.GuideId=g.GuideId ORDER BY g.Name FOR JSON PATH)) AS groups,
      JSON_QUERY((SELECT r.RegistrationId,r.ActivityId,r.BookingId,b.CruiseId,usr.Name AS Passenger,cb.Number AS Cabin,r.Status,m.GroupId FROM dbo.Registrations r JOIN dbo.Activities a ON a.ActivityId=r.ActivityId JOIN dbo.Bookings b ON b.BookingId=r.BookingId JOIN dbo.Passengers ps ON ps.PassengerId=b.PassengerId JOIN dbo.Users usr ON usr.UserId=ps.UserId JOIN dbo.Cabins cb ON cb.CabinId=b.CabinId LEFT JOIN dbo.ExcursionGroupMembers m ON m.RegistrationId=r.RegistrationId WHERE a.Kind='SHORE' AND r.Status='CONFIRMED' ORDER BY usr.Name FOR JSON PATH)) AS registrations
-     FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`))[0]||{};for(const k of ['cruises','stops','providers','vehicles','guides','activities','groups','registrations'])if(!Array.isArray(data[k]))data[k]=[];return send(200,data);
+     FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`);for(const k of ['cruises','stops','providers','vehicles','guides','activities','groups','registrations'])if(!Array.isArray(data[k]))data[k]=[];return send(200,data);
    }   if(url.pathname==='/api/admin/data'){
     requireRoles(u,'ADMIN');return send(200,await jsonQuery(`SELECT
      JSON_QUERY((SELECT u.UserId,u.Name,u.Email,u.Active,JSON_QUERY((SELECT r.Code FROM UserRoles ur JOIN Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId FOR JSON PATH)) AS roles FROM Users u ORDER BY u.UserId FOR JSON PATH)) AS users,

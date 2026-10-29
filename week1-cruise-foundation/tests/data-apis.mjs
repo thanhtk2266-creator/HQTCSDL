@@ -54,6 +54,16 @@ try{
   assert.equal(response.data.policy.length,1);
   assert(response.data.activities.some(activity=>activity.Name==='Yoga đón bình minh'));
  });
+ await check('API tour bờ trả dữ liệu đã seed',async()=>{
+  const cookie=await login(base,'shore@demo.local');
+  const response=await call(base,'/api/shore/data',undefined,cookie);
+  assert.equal(response.status,200,JSON.stringify(response.data));
+  assert.equal(response.data.cruises.length,1);
+  assert.equal(response.data.stops.length,2);
+  assert.equal(response.data.providers.length,1);
+  assert.equal(response.data.activities.length,2);
+  assert(response.data.activities.some(activity=>activity.Name==='Khám phá vịnh Hạ Long'));
+ });
 }finally{
  if(server){server.kill();await new Promise(resolve=>server.once('exit',resolve));}
  try{dropDatabase();console.log('Database kiểm thử tạm đã được xóa.');}catch(error){console.error('Không xóa được database kiểm thử:',error.message);}
