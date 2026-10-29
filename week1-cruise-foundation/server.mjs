@@ -377,7 +377,7 @@ const server=http.createServer(async(req,res)=>{
    }
    if(url.pathname==='/api/state')return send(200,await state(u));
    if(req.method==='GET'&&url.pathname==='/api/activity/data'){
-    requireRoles(u,'ACTIVITY');const data=(await jsonQuery(`SELECT
+    requireRoles(u,'ACTIVITY');const data=await jsonQuery(`SELECT
      JSON_QUERY((SELECT CruiseId,ShipId,Name,StartDate,EndDate,Status FROM dbo.Cruises ORDER BY StartDate,CruiseId FOR JSON PATH)) AS cruises,
      JSON_QUERY((SELECT z.ZoneId,z.ShipId,z.Name AS ZoneName,s.Name AS ShipName FROM dbo.Zones z JOIN dbo.Ships s ON s.ShipId=z.ShipId ORDER BY s.Name,z.Name FOR JSON PATH)) AS zones,
      JSON_QUERY((SELECT a.ActivityId,a.CruiseId,c.Name AS Cruise,a.ZoneId,z.Name AS Location,a.Name,a.StartsAt,a.EndsAt,a.Capacity,a.Fee,a.Status,
@@ -386,7 +386,7 @@ const server=http.createServer(async(req,res)=>{
       (SELECT COUNT(*) FROM dbo.Registrations r WHERE r.ActivityId=a.ActivityId AND r.Status='CANCELLED') AS Cancelled
       FROM dbo.Activities a JOIN dbo.Cruises c ON c.CruiseId=a.CruiseId LEFT JOIN dbo.Zones z ON z.ZoneId=a.ZoneId WHERE a.Kind='ONBOARD' ORDER BY a.StartsAt,a.ActivityId FOR JSON PATH)) AS activities,
      JSON_QUERY((SELECT CancelHours,RefundPercent FROM dbo.Policy WHERE PolicyId=1 FOR JSON PATH)) AS policy
-     FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`))[0]||{};
+    FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`);
     for(const key of ['cruises','zones','activities','policy'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
    }
    if(req.method==='GET'&&url.pathname==='/api/shore/data'){

@@ -12,10 +12,11 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check src/db.mjs && node --check public/app.js && node --check public/sw.js && node --check scripts/setup.mjs && node --check tests/passenger-finance.mjs",
+    "check": "node --check server.mjs && node --check src/db.mjs && node --check public/app.js && node --check public/sw.js && node --check scripts/setup.mjs && node --check tests/passenger-finance.mjs && node --check tests/data-apis.mjs",
     "test:auth": "node tests/auth.mjs",
     "test:integrity": "node tests/integrity.mjs",
     "test:pos": "node tests/pos-sync.mjs",
-    "test:finance": "node tests/passenger-finance.mjs"
+    "test:finance": "node tests/passenger-finance.mjs",
+    "test:data-apis": "node tests/data-apis.mjs"
   }
 }
