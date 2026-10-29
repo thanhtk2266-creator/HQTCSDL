@@ -64,6 +64,16 @@ try{
   assert.equal(response.data.activities.length,2);
   assert(response.data.activities.some(activity=>activity.Name==='Khám phá vịnh Hạ Long'));
  });
+ await check('API tài chính nhân viên trả tài khoản đã seed',async()=>{
+  const cookie=await login(base,'finance@demo.local');
+  const response=await call(base,'/api/finance/data',undefined,cookie);
+  assert.equal(response.status,200,JSON.stringify(response.data));
+  assert.equal(response.data.accounts.length,20);
+  assert(Array.isArray(response.data.transactions));
+  assert(Array.isArray(response.data.disputes));
+  assert(Array.isArray(response.data.invoices));
+  assert(response.data.accounts.some(account=>account.Passenger==='Nguyễn Minh Anh'));
+ });
 }finally{
  if(server){server.kill();await new Promise(resolve=>server.once('exit',resolve));}
  try{dropDatabase();console.log('Database kiểm thử tạm đã được xóa.');}catch(error){console.error('Không xóa được database kiểm thử:',error.message);}

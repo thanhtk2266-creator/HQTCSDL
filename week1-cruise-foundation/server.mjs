@@ -339,7 +339,7 @@ const server=http.createServer(async(req,res)=>{
     return send(200,finance);
    }
     if(url.pathname==='/api/finance/data'){
-     requireRoles(u,'FINANCE');const finance=(await jsonQuery(staffFinanceQuery()))[0]||{};
+     requireRoles(u,'FINANCE');const finance=await jsonQuery(staffFinanceQuery());
      for(const key of ['accounts','transactions','disputes','invoices'])if(!Array.isArray(finance[key]))finance[key]=[];
      return send(200,finance);
     }
