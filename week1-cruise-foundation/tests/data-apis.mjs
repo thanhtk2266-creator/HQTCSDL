@@ -74,6 +74,15 @@ try{
   assert(Array.isArray(response.data.invoices));
   assert(response.data.accounts.some(account=>account.Passenger==='Nguyễn Minh Anh'));
  });
+ await check('API phản hồi trả hoạt động và chuyến cho vận hành',async()=>{
+  const cookie=await login(base,'operations@demo.local');
+  const response=await call(base,'/api/feedback/data',undefined,cookie);
+  assert.equal(response.status,200,JSON.stringify(response.data));
+  assert.equal(response.data.activities.length,5);
+  assert.equal(response.data.cruises.length,1);
+  assert(response.data.activities.some(activity=>activity.Name==='Yoga đón bình minh'));
+  assert(response.data.cruises.some(cruise=>cruise.Name==='Hành trình Di sản'));
+ });
 }finally{
  if(server){server.kill();await new Promise(resolve=>server.once('exit',resolve));}
  try{dropDatabase();console.log('Database kiểm thử tạm đã được xóa.');}catch(error){console.error('Không xóa được database kiểm thử:',error.message);}

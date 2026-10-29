@@ -372,7 +372,7 @@ const server=http.createServer(async(req,res)=>{
      `SELECT c.CruiseId,c.Name,c.StartDate,c.EndDate,c.Status,CAST(AVG(CAST(f.Rating AS decimal(10,2))) AS decimal(4,2)) AS AverageRating,COUNT(f.FeedbackId) AS RatingCount
       FROM dbo.Cruises c LEFT JOIN dbo.CruiseFeedback f ON f.CruiseId=c.CruiseId GROUP BY c.CruiseId,c.Name,c.StartDate,c.EndDate,c.Status ORDER BY c.StartDate DESC,c.CruiseId FOR JSON PATH`
     );
-    const data=(await jsonQuery(`SELECT JSON_QUERY((${activityRows})) AS activities,JSON_QUERY((${cruiseRows})) AS cruises FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`))[0]||{};
+    const data=await jsonQuery(`SELECT JSON_QUERY((${activityRows})) AS activities,JSON_QUERY((${cruiseRows})) AS cruises FOR JSON PATH,WITHOUT_ARRAY_WRAPPER`);
     for(const key of ['activities','cruises'])if(!Array.isArray(data[key]))data[key]=[];return send(200,data);
    }
    if(url.pathname==='/api/state')return send(200,await state(u));
