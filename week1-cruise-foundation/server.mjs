@@ -131,7 +131,16 @@ async function state(u){
    ic.Reason,u.Name,ic.CreatedAt FROM dbo.ItineraryChanges ic JOIN dbo.Stops s ON s.StopId=ic.StopId JOIN dbo.Users u ON u.UserId=ic.StaffId
    LEFT JOIN dbo.Ports op ON op.PortId=ic.OldPortId LEFT JOIN dbo.Ports np ON np.PortId=ic.NewPortId LEFT JOIN dbo.Ports p ON p.PortId=s.PortId
  ) h WHERE h.CruiseId IN(${cs}) ORDER BY h.CreatedAt DESC`:`SELECT CAST(NULL AS bigint) AS ChangeId,CAST(NULL AS int) AS CruiseId,CAST(NULL AS varchar(10)) AS ChangeType,CAST(NULL AS nvarchar(200)) AS Subject,CAST(NULL AS nvarchar(500)) AS OldSchedule,CAST(NULL AS nvarchar(500)) AS NewSchedule,CAST(NULL AS nvarchar(500)) AS Reason,CAST(NULL AS nvarchar(100)) AS Staff,CAST(NULL AS datetime2) AS CreatedAt WHERE 1=0`;
- const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} WHERE n.CruiseId IN(${cs})`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
+ const noticeAudience=`(n.TargetType='CRUISE' AND (
+  EXISTS(SELECT 1 FROM dbo.Bookings nb JOIN dbo.Passengers np ON np.PassengerId=nb.PassengerId WHERE nb.CruiseId=n.CruiseId AND np.UserId=${u.UserId}) OR
+  EXISTS(SELECT 1 FROM dbo.UserRoles nur JOIN dbo.Roles nrole ON nrole.RoleId=nur.RoleId WHERE nur.UserId=${u.UserId} AND nrole.Code<>'PASSENGER')) OR
+ (n.TargetType='ROLE' AND EXISTS(SELECT 1 FROM dbo.UserRoles nur WHERE nur.UserId=${u.UserId} AND nur.RoleId=n.TargetRoleId) AND
+  (NOT EXISTS(SELECT 1 FROM dbo.Roles nrole WHERE nrole.RoleId=n.TargetRoleId AND nrole.Code='PASSENGER') OR
+   EXISTS(SELECT 1 FROM dbo.Bookings nb JOIN dbo.Passengers np ON np.PassengerId=nb.PassengerId WHERE nb.CruiseId=n.CruiseId AND np.UserId=${u.UserId}))) OR
+ (n.TargetType='USER' AND n.TargetUserId=${u.UserId} AND (
+  EXISTS(SELECT 1 FROM dbo.Bookings nb JOIN dbo.Passengers np ON np.PassengerId=nb.PassengerId WHERE nb.CruiseId=n.CruiseId AND np.UserId=${u.UserId}) OR
+  EXISTS(SELECT 1 FROM dbo.UserRoles nur JOIN dbo.Roles nrole ON nrole.RoleId=nur.RoleId WHERE nur.UserId=${u.UserId} AND nrole.Code<>'PASSENGER')))`;
+ const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.TargetType,n.TargetRoleId,n.TargetUserId,rt.Name AS TargetRoleName,tu.Name AS TargetUserName,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} LEFT JOIN dbo.Roles rt ON rt.RoleId=n.TargetRoleId LEFT JOIN dbo.Users tu ON tu.UserId=n.TargetUserId WHERE n.CruiseId IN(${cs}) AND ${noticeAudience}`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
  bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
  identifiers:guest?`SELECT i.IdentifierId,i.BookingId,i.Code,i.Kind FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId} AND i.Active=1`:'SELECT IdentifierId,BookingId,Code,Kind FROM dbo.Identifiers WHERE 1=0',
  checkinDevices:u.roles.some(r=>['ACTIVITY','SHORE','ADMIN'].includes(r))?"SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE Kind='CHECKIN'":'SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE 1=0',
@@ -236,9 +245,23 @@ const server=http.createServer(async(req,res)=>{
      await runProcedure(`EXEC dbo.usp_ResolveDispute @DisputeId=${disputeId},@StaffId=${u.UserId},@Resolution=${literal(resolution)};`);
      return send(200,{ok:true});
     }
+    if(req.method==='GET'&&url.pathname==='/api/notifications/options'){
+     requireRoles(u,'ITINERARY','OPERATIONS');const cruiseId=id(url.searchParams.get('cruiseId'));
+     const cruises=await jsonQuery(`SELECT CruiseId FROM dbo.Cruises WHERE CruiseId=${cruiseId} FOR JSON PATH`);
+     if(!cruises.length)fail(404,'Chuyến đi không tồn tại.');
+     const [recipientRoles,users]=await Promise.all([
+      jsonQuery("SELECT RoleId,Code,Name FROM dbo.Roles ORDER BY Name FOR JSON PATH"),
+      jsonQuery(`SELECT DISTINCT u.UserId,u.Name,u.Email FROM dbo.Users u WHERE u.Active=1 AND (
+       EXISTS(SELECT 1 FROM dbo.Bookings b JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE b.CruiseId=${cruiseId} AND p.UserId=u.UserId) OR
+       EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=u.UserId AND r.Code<>'PASSENGER')) ORDER BY u.Name FOR JSON PATH`)
+     ]);
+     return send(200,{roles:recipientRoles,users});
+    }
     if(req.method==='POST'&&url.pathname==='/api/notifications'){
-     requireRoles(u,'ITINERARY','OPERATIONS');const b=await requestJson(req),cruiseId=id(b.cruiseId),message=text(b.message,500).trim();
-     await runProcedure(`EXEC dbo.usp_Notify @CruiseId=${cruiseId},@Message=${literal(message)},@StaffId=${u.UserId};`);
+     requireRoles(u,'ITINERARY','OPERATIONS');const b=await requestJson(req),cruiseId=id(b.cruiseId),message=text(b.message,500).trim(),targetType=typeof b.targetType==='string'?b.targetType.trim().toUpperCase():'CRUISE';
+     if(!['CRUISE','ROLE','USER'].includes(targetType))fail(400,'Đối tượng nhận thông báo không hợp lệ.');
+     const targetRoleId=targetType==='ROLE'?id(b.targetRoleId):null,targetUserId=targetType==='USER'?id(b.targetUserId):null;
+     await runProcedure(`EXEC dbo.usp_Notify @CruiseId=${cruiseId},@Message=${literal(message)},@StaffId=${u.UserId},@TargetType=${literal(targetType)},@TargetRoleId=${targetRoleId??'NULL'},@TargetUserId=${targetUserId??'NULL'};`);
      return send(201,{ok:true});
     }
     if(req.method==='POST'&&url.pathname==='/api/notifications/read'){
