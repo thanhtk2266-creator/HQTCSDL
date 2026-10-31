@@ -7,9 +7,9 @@ import {fileURLToPath} from 'node:url';
 import {query,jsonQuery,literal,verifyPassword,hashPassword} from './src/db.mjs';
 import QRCode from 'qrcode';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
-const port=Number(process.env.PORT||3001),cookieName='aurora_week1';
+const port=Number(process.env.PORT||3001),cookieName='aurora_week1',reminderIntervalSeconds=Number(process.env.SHORE_REMINDER_INTERVAL_SECONDS||60);
 const sessions=new Map(),attempts=new Map(),ttl=Number(process.env.SESSION_TTL_SECONDS||28800)*1000;
-if(!Number.isInteger(port)||port<1||port>65535||!Number.isFinite(ttl)||ttl<1000)throw Error('PORT hoặc SESSION_TTL_SECONDS không hợp lệ.');
+if(!Number.isInteger(port)||port<1||port>65535||!Number.isFinite(ttl)||ttl<1000||!Number.isInteger(reminderIntervalSeconds)||reminderIntervalSeconds<10||reminderIntervalSeconds>3600)throw Error('PORT, SESSION_TTL_SECONDS hoặc SHORE_REMINDER_INTERVAL_SECONDS không hợp lệ.');
 const roles={PASSENGER:'Hành khách',ITINERARY:'Điều phối hành trình',ACTIVITY:'Quản lý hoạt động',SHORE:'Quản lý tour bờ',POS:'Nhân viên POS',FINANCE:'Tài chính – Lễ tân',OPERATIONS:'Quản lý vận hành',ADMIN:'Quản trị hệ thống'};
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
 const id=v=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<1)fail(400,'ID không hợp lệ.');return n;};
@@ -140,7 +140,7 @@ async function state(u){
  (n.TargetType='USER' AND n.TargetUserId=${u.UserId} AND (
   EXISTS(SELECT 1 FROM dbo.Bookings nb JOIN dbo.Passengers np ON np.PassengerId=nb.PassengerId WHERE nb.CruiseId=n.CruiseId AND np.UserId=${u.UserId}) OR
   EXISTS(SELECT 1 FROM dbo.UserRoles nur JOIN dbo.Roles nrole ON nrole.RoleId=nur.RoleId WHERE nur.UserId=${u.UserId} AND nrole.Code<>'PASSENGER')))`;
- const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.TargetType,n.TargetRoleId,n.TargetUserId,rt.Name AS TargetRoleName,tu.Name AS TargetUserName,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} LEFT JOIN dbo.Roles rt ON rt.RoleId=n.TargetRoleId LEFT JOIN dbo.Users tu ON tu.UserId=n.TargetUserId WHERE n.CruiseId IN(${cs}) AND ${noticeAudience}`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
+ const cols={cruises:`SELECT c.*,s.Name AS Ship FROM Cruises c JOIN Ships s ON s.ShipId=c.ShipId WHERE c.CruiseId IN(${cs})`,ships:'SELECT ShipId,Name,Capacity FROM Ships',ports:'SELECT PortId,Name FROM Ports',stops:`SELECT s.StopId,s.CruiseId,s.PortId,p.Name AS Port,s.Arrival,s.Departure FROM Stops s JOIN Ports p ON p.PortId=s.PortId WHERE s.CruiseId IN(${cs})`,activities:`SELECT a.*,COALESCE(z.Name,p.Name,N'—') AS Location FROM Activities a LEFT JOIN Zones z ON z.ZoneId=a.ZoneId LEFT JOIN Stops st ON st.StopId=a.StopId LEFT JOIN Ports p ON p.PortId=st.PortId WHERE a.CruiseId IN(${cs})${kind}`,registrations:registrationStats,notifications:`SELECT n.NotificationId,n.CruiseId,n.Message,n.TargetType,n.TargetRoleId,n.TargetUserId,rt.Name AS TargetRoleName,tu.Name AS TargetUserName,rd.ReminderType,n.CreatedAt,CAST(CASE WHEN nr.UserId IS NULL THEN 0 ELSE 1 END AS bit) AS IsRead FROM dbo.Notifications n LEFT JOIN dbo.NotificationReads nr ON nr.NotificationId=n.NotificationId AND nr.UserId=${u.UserId} LEFT JOIN dbo.Roles rt ON rt.RoleId=n.TargetRoleId LEFT JOIN dbo.Users tu ON tu.UserId=n.TargetUserId LEFT JOIN dbo.ShoreReminderDispatches rd ON rd.NotificationId=n.NotificationId WHERE n.CruiseId IN(${cs}) AND ${noticeAudience}`,changes:historyQuery,services:'SELECT ServiceId,Name,Price FROM Services',devices:"SELECT DeviceId,Name,Kind FROM Devices WHERE Kind='POS'",packageServices:'SELECT PackageId,ServiceId FROM PackageServices',
  bookings:bookingQuery(u)+(guests?'':' AND 1=0'),accounts:`SELECT AccountId,BookingId,Status FROM Accounts WHERE BookingId IN(${bs})${money?'':' AND 1=0'}`,
  identifiers:guest?`SELECT i.IdentifierId,i.BookingId,i.Code,i.Kind FROM dbo.Identifiers i JOIN dbo.Bookings b ON b.BookingId=i.BookingId JOIN dbo.Passengers p ON p.PassengerId=b.PassengerId WHERE p.UserId=${u.UserId} AND i.Active=1`:'SELECT IdentifierId,BookingId,Code,Kind FROM dbo.Identifiers WHERE 1=0',
  checkinDevices:u.roles.some(r=>['ACTIVITY','SHORE','ADMIN'].includes(r))?"SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE Kind='CHECKIN'":'SELECT DeviceId,Name,Kind FROM dbo.Devices WHERE 1=0',
@@ -455,6 +455,15 @@ const server=http.createServer(async(req,res)=>{
  }catch(e){const status=e.status||(e.code==='ENOENT'?404:503);send(status,{error:status===503?'Chưa kết nối được database. Kiểm tra SQL Server và chạy npm run setup.':e.message});}
 });
 await query('SELECT TOP(1) PasswordHash,Active FROM Users;');
-server.listen(port,'127.0.0.1',()=>console.log(`Aurora Cruise: http://localhost:${port}`));
+let reminderJobRunning=false;
+async function runShoreReminderJob(){
+ if(reminderJobRunning)return;
+ reminderJobRunning=true;
+ try{await query('EXEC dbo.usp_GenerateShoreReminders;');}
+ catch(error){console.error('Không chạy được tác vụ nhắc tour bờ. Hãy kiểm tra migration 18-shore-reminders.sql:',error.message);}
+ finally{reminderJobRunning=false;}
+}
+server.listen(port,'127.0.0.1',()=>{console.log(`Aurora Cruise: http://localhost:${port}`);void runShoreReminderJob();});
+setInterval(()=>void runShoreReminderJob(),reminderIntervalSeconds*1000).unref();
 setInterval(()=>{for(const [id,s] of sessions)if(s.expires<=Date.now())sessions.delete(id);for(const [key,t] of attempts)if(Date.now()-t.time>=60000)attempts.delete(key);},60000).unref();
 
