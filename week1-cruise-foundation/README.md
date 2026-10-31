@@ -1,6 +1,6 @@
 # Aurora Cruise · hành trình, tài chính và vận hành
 
-Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 9 vai trò, Tổng quan theo booking/chuyến, lịch trình, đăng ký, hủy, quản trị, POS, tài chính, check-in và phản hồi. Finance/Admin đối soát giao dịch POS, xử lý tranh chấp, void/hoàn giao dịch có phân quyền, chốt tài khoản, ghi thanh toán mô phỏng, in hóa đơn và xuất CSV. Thông báo được gửi theo chuyến; mỗi tài khoản có trạng thái đã đọc riêng. Hành khách chỉ gửi tranh chấp cho giao dịch thuộc booking của mình. Không phụ thuộc thư mục `cruise-sql` khi chạy.
+Mốc hiện tại: đăng nhập/đăng xuất, mật khẩu băm scrypt, phiên 8 giờ, 9 vai trò, Tổng quan theo booking/chuyến, lịch trình, đăng ký, hủy, quản trị, POS, tài chính, check-in và phản hồi. Finance/Admin đối soát giao dịch POS, xử lý tranh chấp, void/hoàn giao dịch có phân quyền, chốt tài khoản, ghi thanh toán mô phỏng, in hóa đơn và xuất CSV. Thông báo hỗ trợ gửi theo chuyến/vai trò/người dùng; hệ thống tự nhắc khách tập trung và về tàu, lưu trạng thái đọc theo tài khoản và chống tạo nhắc trùng. Hành khách chỉ gửi tranh chấp cho giao dịch thuộc booking của mình. Không phụ thuộc thư mục `cruise-sql` khi chạy.
 
 ## Chạy
 
@@ -46,17 +46,21 @@ Vai trò Quản lý hoạt động có thể tạo, sửa, tìm kiếm và lọc
 
 Hành khách mở mục **Thẻ hành khách** để xem mã QR và mã định danh của booking đang chọn. Nhân viên hoạt động hoặc tour bờ chọn chuyến, hoạt động, thiết bị check-in rồi quét QR hoặc nhập mã; SQL xác minh mã đang hoạt động và đăng ký đã xác nhận. Với tour bờ, nhân viên có thể ghi nhận khách đã về tàu sau khi check-in. Migration nằm trong `database/14-checkin.sql` và được setup tự chạy.
 
+## Nhắc tập trung và về tàu tự động
+
+Khi server đang chạy, tác vụ nền kiểm tra tour bờ mỗi 60 giây. Khách đã đăng ký nhưng chưa check-in được nhắc tập trung trước giờ bắt đầu 30 phút; khách đã check-in nhưng chưa có `ReturnedAt` được nhắc về tàu trước giờ dự kiến 15 phút. Mỗi lượt đăng ký, loại nhắc và mốc lịch trình chỉ tạo một thông báo; nếu giờ tour được đổi, mốc giờ mới có thể tạo nhắc mới. Nhắc được gửi như thông báo cá nhân, chỉ tài khoản khách đó xem/đánh dấu đã đọc. Sau khi máy chủ khởi động lại, tác vụ chạy lại và tự kiểm tra các nhắc đến hạn. Bảng nhật ký và thủ tục nằm trong `database/18-shore-reminders.sql`.
+
 ## POS và tài khoản chi tiêu
 
 Nhân viên POS nhập mã khách, chọn dịch vụ và số lượng. Khi trực tuyến, `/api/pos/quote` tra booking, gói, giá niêm yết, dịch vụ đã gồm và tổng dự kiến; thao tác ghi tiếp tục được SQL xác thực và tính lại. Giao dịch được lưu vào account của booking, gồm dịch vụ, số lượng, thiết bị, nhân viên, UUID và số tiền thực thu. Dịch vụ nằm trong gói có đơn giá 0. Khi ngoại tuyến, giao dịch được xếp hàng; giá và account chỉ được xác nhận lúc đồng bộ.
 
 ## Tài chính và thông báo
 
-Finance/Admin theo dõi số dư theo booking, đối soát giao dịch POS, void hoặc hoàn giao dịch POS, giải quyết tranh chấp và xuất danh sách giao dịch CSV. Chỉ được chốt sau khi các tranh chấp và giao dịch POS chưa đối soát đã được xử lý; thao tác chốt tạo hóa đơn cùng khoản thanh toán mô phỏng `MOCK`. Có thể in hóa đơn sau khi chốt. Nhân viên điều phối, vận hành và quản trị gửi thông báo cho chuyến; hành khách và nhân viên xem thông báo, đánh dấu đã đọc. Trạng thái đọc được lưu theo từng tài khoản.
+Finance/Admin theo dõi số dư theo booking, đối soát giao dịch POS, void hoặc hoàn giao dịch POS, giải quyết tranh chấp và xuất danh sách giao dịch CSV. Chỉ được chốt sau khi các tranh chấp và giao dịch POS chưa đối soát đã được xử lý; thao tác chốt tạo hóa đơn cùng khoản thanh toán mô phỏng `MOCK`. Có thể in hóa đơn sau khi chốt. Nhân viên điều phối, vận hành và quản trị gửi thông báo theo chuyến, vai trò hoặc người dùng; người nhận hợp lệ xem và đánh dấu đã đọc. Tác vụ nền tự nhắc tour bờ: tập trung trước 30 phút và về tàu trước 15 phút, chống tạo nhắc trùng.
 
 ## SQL và kiểm tra
 
-Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities → 14-shore-excursions → 14-checkin → 15-feedback → 16-finance-notifications trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
+Setup chạy 01-schema → 03-seed → 04-auth → 05-itinerary → 06-registration → 07-cancellation → 08-admin → 09-integrity → 10-pos-sync → 11-pos-receipts → 12-passenger-finance → 13-onboard-activities → 14-shore-excursions → 14-checkin → 15-feedback → 16-finance-notifications → 17-recipient-notifications → 18-shore-reminders trên DB mới. Với DB CruiseWeek1 hiện có, setup giữ dữ liệu rồi chạy các migration để cập nhật nghiệp vụ. Seed không gọi usp_Register. Các giờ hoạt động lưu theo giờ địa phương của SQL Server; tác vụ nhắc dùng cùng đồng hồ đó. Nếu dùng SSMS bật SQLCMD Mode. Sau khi chạy SQL bằng tay, chạy setup để cấp hash demo và cập nhật migration.
 
 Chạy `npm run check`, `npm run test:auth`, `npm run test:integrity`, `npm run test:pos` và `npm run test:finance`. Test nghiệp vụ tự tạo database riêng rồi xóa sau khi chạy. Hướng dẫn: `docs/POS-OFFLINE.md`, `docs/PASSENGER-FINANCE.md`; chi tiết API/quyền: `docs/AUTH.md`.
 

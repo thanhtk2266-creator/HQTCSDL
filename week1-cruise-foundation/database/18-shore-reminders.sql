@@ -24,15 +24,18 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE dbo.usp_GenerateShoreReminders
- @NowUtc datetime2(7)=NULL,
+ @NowLocal datetime2(7)=NULL,
  @GatherMinutes int=30,
  @ReturnMinutes int=15
 AS
 BEGIN
  SET NOCOUNT ON;
  SET XACT_ABORT ON;
- SET @NowUtc=COALESCE(@NowUtc,SYSUTCDATETIME());
- IF @GatherMinutes NOT BETWEEN 1 AND 1440 OR @ReturnMinutes NOT BETWEEN 1 AND 1440
+ /* Activities use local datetime values; use the same SQL Server local clock
+    as registration rules (SYSDATETIME), not UTC CreatedAt timestamps. */
+ SET @NowLocal=COALESCE(@NowLocal,SYSDATETIME());
+ IF @GatherMinutes IS NULL OR @ReturnMinutes IS NULL
+  OR @GatherMinutes NOT BETWEEN 1 AND 1440 OR @ReturnMinutes NOT BETWEEN 1 AND 1440
   THROW 51800,N'Thời gian nhắc phải nằm trong khoảng 1 đến 1440 phút.',1;
 
  CREATE TABLE #Due(
@@ -56,8 +59,8 @@ BEGIN
  JOIN dbo.Users u ON u.UserId=p.UserId AND u.Active=1
  WHERE a.Kind='SHORE' AND a.Status IN('OPEN','DELAYED')
   AND r.Status='CONFIRMED'
-  AND a.StartsAt>@NowUtc
-  AND @NowUtc>=DATEADD(minute,-@GatherMinutes,a.StartsAt)
+  AND a.StartsAt>@NowLocal
+  AND @NowLocal>=DATEADD(minute,-@GatherMinutes,a.StartsAt)
   AND NOT EXISTS(SELECT 1 FROM dbo.CheckIns ci WHERE ci.RegistrationId=r.RegistrationId);
 
  /* Return to ship: checked-in guests without ReturnedAt. Keep this reminder
@@ -71,7 +74,7 @@ BEGIN
  JOIN dbo.Users u ON u.UserId=p.UserId AND u.Active=1
  JOIN dbo.CheckIns ci ON ci.RegistrationId=r.RegistrationId AND ci.ReturnedAt IS NULL
  WHERE a.Kind='SHORE' AND a.ReturnAt IS NOT NULL
-  AND @NowUtc>=DATEADD(minute,-@ReturnMinutes,a.ReturnAt);
+  AND @NowLocal>=DATEADD(minute,-@ReturnMinutes,a.ReturnAt);
 
  DECLARE @Created int=0,@LockResult int;
  BEGIN TRY
