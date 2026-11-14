@@ -16,7 +16,7 @@ Chính sách quản trị viên cho phép đặt thời điểm mở đăng ký 
 
 ### Lịch sử đăng ký
 
-Migration `database/22-registration-history.sql` giữ mỗi lượt đăng ký thành một bản ghi, cho phép đăng ký lại sau khi hủy bằng một lượt mới và ghi sự kiện đăng ký, đăng ký lại, hủy hoặc đổi trạng thái vào `RegistrationHistory`. Dòng đăng ký không được xóa; thời điểm hủy được tự điền cả khi nghiệp vụ khác chuyển trạng thái sang đã hủy. Màn hình lịch sử chi tiết sẽ được bổ sung ở mốc kế tiếp.
+Migration `database/22-registration-history.sql` giữ mỗi lượt đăng ký thành một bản ghi, cho phép đăng ký lại sau khi hủy bằng một lượt mới và ghi sự kiện đăng ký, đăng ký lại, hủy hoặc đổi trạng thái vào `RegistrationHistory`. Dòng đăng ký không được xóa; thời điểm hủy được tự điền cả khi nghiệp vụ khác chuyển trạng thái sang đã hủy. Thẻ hành khách hiển thị từng lượt cùng bảng lịch sử sự kiện; khách có thể đăng ký lại trong thời gian đăng ký cho phép.
 
 ## Chạy
 
