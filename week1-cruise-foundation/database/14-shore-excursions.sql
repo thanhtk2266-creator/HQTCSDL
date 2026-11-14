@@ -114,9 +114,12 @@ CREATE OR ALTER PROCEDURE dbo.usp_AssignExcursionGuest @ActorId int,@Registratio
 BEGIN
  SET NOCOUNT ON; SET XACT_ABORT ON;
  IF NOT EXISTS(SELECT 1 FROM dbo.UserRoles ur JOIN dbo.Roles r ON r.RoleId=ur.RoleId WHERE ur.UserId=@ActorId AND r.Code IN('SHORE','ADMIN')) THROW 51550,N'Chỉ quản lý tour bờ được phân khách vào nhóm.',1;
- DECLARE @ActivityId int; SELECT @ActivityId=a.ActivityId FROM dbo.Registrations r JOIN dbo.Activities a ON a.ActivityId=r.ActivityId WHERE r.RegistrationId=@RegistrationId AND a.Kind='SHORE' AND r.Status='CONFIRMED';
- IF @ActivityId IS NULL THROW 51551,N'Chỉ lượt đăng ký tour bờ đã xác nhận mới được phân nhóm.',1;
+ DECLARE @ActivityId int;
  BEGIN TRY BEGIN TRAN;
+  /* Serialize assignment changes with usp_CheckIn, which locks this same registration row. */
+  SELECT @ActivityId=a.ActivityId FROM dbo.Registrations r WITH(UPDLOCK,HOLDLOCK) JOIN dbo.Activities a ON a.ActivityId=r.ActivityId WHERE r.RegistrationId=@RegistrationId AND a.Kind='SHORE' AND r.Status='CONFIRMED';
+  IF @ActivityId IS NULL THROW 51551,N'Chỉ lượt đăng ký tour bờ đã xác nhận mới được phân nhóm.',1;
+  IF EXISTS(SELECT 1 FROM dbo.CheckIns WITH(UPDLOCK,HOLDLOCK) WHERE RegistrationId=@RegistrationId) THROW 51554,N'Không thể thay đổi nhóm vì hành khách đã check-in.',1;
   IF @GroupId IS NULL DELETE dbo.ExcursionGroupMembers WHERE RegistrationId=@RegistrationId;
   ELSE BEGIN
    DECLARE @GroupCapacity int; SELECT @GroupCapacity=Capacity FROM dbo.ExcursionGroups WITH(UPDLOCK,HOLDLOCK) WHERE GroupId=@GroupId AND ActivityId=@ActivityId AND Active=1;

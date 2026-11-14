@@ -1,4 +1,4 @@
-const CACHE = 'aurora-week1-shell-v4';
+const CACHE = 'aurora-week1-shell-v5';
 const APP_SHELL = [
   '/',
   '/index.html',
