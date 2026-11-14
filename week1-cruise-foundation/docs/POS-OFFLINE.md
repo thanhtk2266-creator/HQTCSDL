@@ -10,7 +10,7 @@
 - Biên nhận có UUID giao dịch duy nhất, nhân viên, thiết bị và thời điểm đồng bộ. Nhân viên POS chỉ tra cứu được 50 biên nhận gần nhất của chính tài khoản mình.
 - SQL dùng `Transactions.ClientId` có unique constraint cùng khóa theo UUID để chống ghi lặp, kể cả hai request cùng lúc. Gửi lại đúng payload trả về giao dịch đã có; dùng UUID cũ với nội dung khác bị từ chối.
 - `RegistrationId` có unique filtered index chỉ áp dụng với đăng ký khác `NULL`. Nhờ vậy một booking chỉ có một giao dịch phí hoạt động, trong khi booking vẫn có thể phát sinh nhiều giao dịch POS.
-- Trình duyệt chỉ xóa mục hàng đợi sau khi nhận ACK và biên nhận có cùng UUID từ API. Nếu mất phản hồi sau khi SQL commit, gửi lại cùng UUID không tạo khoản phí hoặc biên nhận thứ hai.
+- Trình duyệt chỉ xóa mục hàng đợi khi API xác nhận thành công, trả giao dịch và biên nhận có cùng UUID, đồng thời hai bản ghi cùng `TransactionId`. Phản hồi thiếu hoặc không khớp giữ nguyên mục để retry. Nếu mất phản hồi sau khi SQL commit, gửi lại cùng UUID không tạo khoản phí hoặc biên nhận thứ hai.
 
 ## Kiểm tra
 
