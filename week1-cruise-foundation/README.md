@@ -14,6 +14,10 @@ Migration `database/19-ble-locations.sql` tạo bảng thiết bị đeo, bộ t
 
 Chính sách quản trị viên cho phép đặt thời điểm mở đăng ký (số giờ trước giờ bắt đầu) và thời điểm đóng đăng ký. Quản lý hoạt động có thể kế thừa khung giờ chung hoặc đặt khung riêng cho từng hoạt động; thủ tục SQL áp dụng cấu hình riêng nếu có và kiểm tra thời hạn khi ghi đăng ký.
 
+### Lịch sử đăng ký
+
+Migration `database/22-registration-history.sql` giữ mỗi lượt đăng ký thành một bản ghi, cho phép đăng ký lại sau khi hủy bằng một lượt mới và ghi sự kiện đăng ký, đăng ký lại, hủy hoặc đổi trạng thái vào `RegistrationHistory`. Dòng đăng ký không được xóa; thời điểm hủy được tự điền cả khi nghiệp vụ khác chuyển trạng thái sang đã hủy. Màn hình lịch sử chi tiết sẽ được bổ sung ở mốc kế tiếp.
+
 ## Chạy
 
 Cần Node.js từ 18, SQL Server và sqlcmd trong PATH. Cài dependency QR bằng `npm ci`, rồi mở terminal ở thư mục này:
