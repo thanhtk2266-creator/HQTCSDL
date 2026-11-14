@@ -9,6 +9,7 @@ Các quy tắc chính:
 - Check-in mới chỉ nhận đăng ký `CONFIRMED`, thiết bị `CHECKIN` và nhân viên đúng bộ phận hoạt động/tour bờ.
 - Hóa đơn phải bằng số dư ròng của giao dịch; thanh toán phải khớp hóa đơn và dùng phương thức được hỗ trợ.
 - Account `SETTLED`, giao dịch, hóa đơn và thanh toán liên quan không được sửa trái quy tắc.
+- Migration `database/23-financial-ledger-guard.sql` xem giao dịch là sổ cái chỉ ghi thêm: cấm xóa, khóa các cột gốc, chỉ cho chuyển `POSTED` sang `REFUNDED`/`VOID` theo metadata hợp lệ và chỉ cho đánh dấu đối soát một lần bởi FINANCE/ADMIN. Cơ sở dữ liệu cũng từ chối cập nhật giao dịch thuộc account đã chốt.
 
 Audit của người dùng, vai trò, booking, đăng ký, giao dịch, hóa đơn, thanh toán, mã định danh, dịch vụ trong gói và chính sách lưu `ActorId`, `Details` và `CorrelationId`. Một nghiệp vụ nhiều bảng dùng chung `CorrelationId` để truy vết đầy đủ mà không tạo bản ghi audit trùng từ stored procedure.
 
